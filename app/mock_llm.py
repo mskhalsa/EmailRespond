@@ -1,41 +1,33 @@
+import os
 import time
-import threading
-import numpy as np
+from dotenv import load_dotenv
+from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
-# List of possible responses to cycle through.
-responses = [
-    "Thank you for your email. I will get back to you shortly.",
-    "I appreciate your message, and I'll respond as soon as possible.",
-    "Your inquiry has been received. I'll review it and reply soon.",
-    "Thanks for reaching out. Expect a detailed response shortly.",
-]
+load_dotenv()
 
-# Global counter to cycle through the responses.
-response_counter = 0
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def mock_openai_response(subject: str, body: str) -> str:
-    """
-    Simulates an API response by waiting for a delay sampled from an exponential
-    distribution (with mean 0.5 seconds) that is bounded between 0.4 and 0.6 seconds,
-    and then returning a response message starting with "Re: {subject}".
-    
-    Args:
-        subject (str): The subject of the email.
-        body (str): The body of the email (currently not used in generating the response).
+    """Real LLM call with OpenAI SDK v1.x, response must be quick."""
+    prompt = (
+        f"Subject: {subject}\n\n"
+        f"{body}\n\n"
+        f"Write a short, professional email reply."
+    )
 
-    Returns:
-        str: The formatted email response.
-    """
-    global response_counter
-    # Generate a delay from an exponential distribution with mean 0.5 seconds.
-    delay = np.random.exponential(scale=0.5)
-    # Bound the delay between 0.4 and 0.6 seconds.
-    delay = max(0.4, min(delay, 0.6))
-    time.sleep(delay)
+    try:
+        start = time.time()
+        response = client.completions.create(
+            model="gpt-3.5-turbo-instruct",
+            prompt=prompt,
+            max_tokens=100,
+            timeout=0.8
+        )
+        duration = time.time() - start
+        print(f"LLM responded in {duration:.2f}s")
+        return response.choices[0].message.content.strip()
 
-    # Cycle through the list of responses.
-    response_text = responses[response_counter % len(responses)]
-    response_counter += 1
-
-    # Return the response with the email subject prefixed.
-    return f"Re: {subject}\n\n{response_text}"
+    except Exception as e:
+        print(f"OpenAI error: {e}")
+        return "Thank you for your message. I'll get back to you soon."
